@@ -186,3 +186,39 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-
 }
 .toast.show { opacity: 1; }
 .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
+
+/* calendar */
+.cal { padding: 12px; }
+.cal-head { gap: 2px; margin-bottom: 8px; }
+.cal-title { margin: 0 4px; text-transform: capitalize; min-width: 8.5em; text-align: center; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-wd { text-align: center; font-size: .72rem; font-weight: 700; color: var(--muted); padding: 2px 0 4px; }
+.cal-day {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+  min-height: 52px; padding: 5px 0 4px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--surface-2); color: var(--text); font: inherit; cursor: pointer;
+}
+.cal-day:hover { border-color: var(--line); }
+.cal-day .n { font-size: .85rem; font-weight: 600; line-height: 1.4; width: 1.7em; height: 1.7em; display: grid; place-items: center; border-radius: 50%; }
+.cal-day.out { background: none; color: var(--muted); opacity: .6; }
+.cal-day.today .n { background: var(--accent); color: #fff; }
+.cal-day.sel { border-color: var(--text); }
+.cal-day .dots { display: flex; gap: 3px; align-items: center; justify-content: center; flex-wrap: wrap; min-height: 14px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.dot.red { background: var(--accent); }
+.dot.green { background: var(--ok); }
+.mark { font-style: normal; font-size: .7rem; line-height: 1; }
+.mark.faint { opacity: .4; }
+.mark.done { color: var(--ok); font-weight: 900; font-size: .8rem; }
+.cal-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 2px 0; }
+.cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.cal-details { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.cal-sel-title { font-weight: 700; text-transform: capitalize; margin-bottom: 4px; }
+.cal-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 0; border-bottom: 1px solid var(--line); padding: 9px 0;
+  font: inherit; color: var(--text); cursor: pointer;
+}
+.cal-item span:nth-child(2) { flex: 1; }
+.cal-item.static { cursor: default; }
+@media (max-width: 400px) { .cal-day { min-height: 46px; } .cal-title { min-width: 0; } }

@@ -111,7 +111,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const now = () => Date.now();
 const uid = () => Math.random().toString(36).slice(2, 9) + now().toString(36).slice(-4);
 const money = (n) => '$' + (Math.round((+n || 0) * 100) / 100).toLocaleString('en-US');
-const todayISO = () => new Date().toISOString().slice(0, 10);
+/* local (not UTC) date as YYYY-MM-DD */
+const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayISO = () => isoOf(new Date());
+const parseISO = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (iso, n) => { const d = parseISO(iso); d.setDate(d.getDate() + n); return isoOf(d); };
+const mondayOf = (iso) => { const d = parseISO(iso); return addDays(iso, -((d.getDay() + 6) % 7)); };
 const daysUntil = (iso) => {
   if (!iso) return null;
   const d = new Date(iso + 'T00:00:00');
@@ -349,10 +354,101 @@ function stats() {
   };
 }
 
+/* The plan is aligned to the Monday of the week it was started. */
+function planMonday() { return mondayOf(data.settings.planStart || todayISO()); }
 function planWeek() {
-  const start = new Date((data.settings.planStart || todayISO()) + 'T00:00:00');
-  const diff = Math.floor((new Date(todayISO() + 'T00:00:00') - start) / 86400000);
+  const diff = Math.round((parseISO(todayISO()) - parseISO(planMonday())) / 86400000);
   return Math.min(PLAN.length - 1, Math.max(0, Math.floor(diff / 7)));
+}
+
+/* ============================== calendar ============================== */
+
+const DAY_OFFSET = { 'Пн': 0, 'Ср': 2, 'Пт': 4, '📱': 5 };
+const POST_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri — reminders after the 4-week plan ends
+
+function calEvents(fromISO, toISO) {
+  const ev = {};
+  const at = (d) => (ev[d] ||= { deadlines: [], done: [], posts: [], reminder: false });
+  for (const o of liveOrders()) {
+    if (o.deadline && ACTIVE.includes(o.status) && o.deadline >= fromISO && o.deadline <= toISO) at(o.deadline).deadlines.push(o);
+    if (o.status === 'done' && o.doneDate && o.doneDate >= fromISO && o.doneDate <= toISO) at(o.doneDate).done.push(o);
+  }
+  const mon = planMonday();
+  PLAN.forEach((w, wi) => w.items.forEach(([day, text], i) => {
+    const d = addDays(mon, wi * 7 + (DAY_OFFSET[day] ?? 0));
+    if (d < fromISO || d > toISO) return;
+    const id = `w${wi}-${i}`;
+    at(d).posts.push({ id, day, text, done: !!(data.checks[id] && data.checks[id].v) });
+  }));
+  const planEnd = addDays(mon, PLAN.length * 7);
+  for (let d = fromISO > planEnd ? fromISO : planEnd; d <= toISO; d = addDays(d, 1)) {
+    if (POST_WEEKDAYS.includes(parseISO(d).getDay())) at(d).reminder = true;
+  }
+  return ev;
+}
+
+let calMonth = todayISO().slice(0, 7);
+let calSel = todayISO();
+
+function calendarView() {
+  const first = calMonth + '-01';
+  const gridStart = mondayOf(first);
+  const last = isoOf(new Date(parseISO(first).getFullYear(), parseISO(first).getMonth() + 1, 0));
+  const gridEnd = addDays(mondayOf(last), 6);
+  const ev = calEvents(gridStart, gridEnd);
+  const today = todayISO();
+  const title = parseISO(first).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(' г.', '');
+  const cells = [];
+  for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) {
+    const e = ev[d];
+    const cls = ['cal-day'];
+    if (d.slice(0, 7) !== calMonth) cls.push('out');
+    if (d === today) cls.push('today');
+    if (d === calSel) cls.push('sel');
+    let dots = '';
+    if (e) {
+      if (e.deadlines.length) dots += `<i class="dot red" title="Дедлайн"></i>`;
+      if (e.done.length) dots += `<i class="dot green" title="Сдан заказ"></i>`;
+      if (e.posts.length) dots += e.posts.every((p) => p.done) ? '<i class="mark done">✓</i>' : '<i class="mark">✏️</i>';
+      else if (e.reminder) dots += '<i class="mark faint">✏️</i>';
+    }
+    cells.push(`<button class="${cls.join(' ')}" data-act="cal-day" data-d="${d}"><span class="n">${parseISO(d).getDate()}</span><span class="dots">${dots}</span></button>`);
+  }
+
+  const se = ev[calSel] || calEvents(calSel, calSel)[calSel];
+  const selTitle = parseISO(calSel).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  let details = '';
+  if (se) {
+    details += se.deadlines.map((o) => `<button class="cal-item" data-act="edit" data-id="${o.id}"><i class="dot red"></i><span><b>Дедлайн:</b> ${esc(o.client)} — ${esc(o.type || '')}</span><span class="badge ${statusOf(o.status).badge}">${esc(statusOf(o.status).label)}</span></button>`).join('');
+    details += se.done.map((o) => `<button class="cal-item" data-act="edit" data-id="${o.id}"><i class="dot green"></i><span><b>Сдан:</b> ${esc(o.client)} — ${money(o.price)}</span></button>`).join('');
+    details += se.posts.map((p) => `
+      <label class="check ${p.done ? 'done' : ''}">
+        <input type="checkbox" data-act="plan" data-id="${p.id}" ${p.done ? 'checked' : ''}>
+        <span class="day">${esc(p.day)}</span><span class="txt">${esc(p.text)}</span>
+      </label>`).join('');
+    if (se.reminder && !se.posts.length) details += '<div class="cal-item static">✏️ <span>День поста: выложи арт, скетч или WIP (19:00–23:00)</span></div>';
+  }
+  if (!details) details = '<div class="muted small" style="padding:6px 0">Ничего не запланировано</div>';
+
+  return `
+  <div class="card cal">
+    <div class="row cal-head">
+      <button class="btn ghost small" data-act="cal-prev" aria-label="Предыдущий месяц">‹</button>
+      <h3 class="cal-title">${esc(title)}</h3>
+      <button class="btn ghost small" data-act="cal-next" aria-label="Следующий месяц">›</button>
+      <span class="spacer"></span>
+      ${calMonth !== today.slice(0, 7) || calSel !== today ? '<button class="btn small" data-act="cal-today">Сегодня</button>' : ''}
+    </div>
+    <div class="cal-grid">
+      ${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((w) => `<div class="cal-wd">${w}</div>`).join('')}
+      ${cells.join('')}
+    </div>
+    <div class="cal-legend small muted"><span><i class="dot red"></i> дедлайн</span><span><i class="dot green"></i> сдан</span><span>✏️ пост</span><span>✓ выложено</span></div>
+    <div class="cal-details">
+      <div class="cal-sel-title">${esc(selTitle)}</div>
+      ${details}
+    </div>
+  </div>`;
 }
 
 /* ============================== views ============================== */
@@ -425,6 +521,9 @@ views.home = () => {
     <div class="card stat"><div class="num">${s.perHour == null ? '—' : money(s.perHour)}</div><div class="lbl">в среднем за час</div></div>
     <div class="card stat"><div class="num">${money(s.totalPaid)}</div><div class="lbl">получено всего</div></div>
   </div>
+
+  <h2>Календарь</h2>
+  ${calendarView()}
 
   <div class="row" style="margin-top:16px"><h2 style="margin:0">Ближайшие дедлайны</h2><span class="spacer"></span><button class="btn primary small" data-act="new">+ Заказ</button></div>
   <div class="stack" style="margin-top:10px">
@@ -703,6 +802,19 @@ view.addEventListener('click', async (e) => {
     for (const k of Object.keys(data.checks)) data.checks[k] = { v: false, updated: t };
     save(); render();
   }
+  else if (act === 'cal-day') {
+    calSel = el.dataset.d;
+    if (calSel.slice(0, 7) !== calMonth) calMonth = calSel.slice(0, 7);
+    render();
+  }
+  else if (act === 'cal-prev' || act === 'cal-next') {
+    const d = parseISO(calMonth + '-01');
+    d.setMonth(d.getMonth() + (act === 'cal-next' ? 1 : -1));
+    calMonth = isoOf(d).slice(0, 7);
+    calSel = calMonth === todayISO().slice(0, 7) ? todayISO() : calMonth + '-01';
+    render();
+  }
+  else if (act === 'cal-today') { calMonth = todayISO().slice(0, 7); calSel = todayISO(); render(); }
   else if (act === 'sync-now') sync();
   else if (act === 'gh-off') {
     if (!confirm('Отключить синхронизацию на этом устройстве? Данные останутся в браузере и в репозитории.')) return;
