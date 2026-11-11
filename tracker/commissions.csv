@@ -1,0 +1,2 @@
+id,date_received,client,contact,type,style,extras,price_usd,paid_upfront_usd,paid_total_usd,status,sketch_sent,final_sent,deadline,hours_spent,can_post,notes
+1,2026-11-15,Example Client,@example (X),Full body,Greyscale,simple background,50,25,25,sketch,2026-11-18,,2026-12-01,1.5,yes,Пример строки — удали её

@@ -1,0 +1,28 @@
+# ToDy — соцсети и комишки
+
+Рабочая папка для ведения соцсетей и приёма коммишенов за доллары.
+
+## Что где лежит
+
+| Файл | Что это | Язык |
+|---|---|---|
+| [`commissions/prices.md`](commissions/prices.md) | Прайс и как он посчитан | RU + EN |
+| [`commissions/commission-sheet.md`](commissions/commission-sheet.md) | Текст для commission sheet / поста «Commissions OPEN» | EN |
+| [`commissions/terms-of-service.md`](commissions/terms-of-service.md) | Правила (ToS) для клиентов | EN |
+| [`commissions/order-form.md`](commissions/order-form.md) | Анкета, которую заполняет клиент | EN |
+| [`commissions/client-messages.md`](commissions/client-messages.md) | Готовые ответы клиентам | EN (с переводом) |
+| [`commissions/payments-kz.md`](commissions/payments-kz.md) | Как получать доллары из Казахстана | RU |
+| [`social/bios.md`](social/bios.md) | Био для каждой соцсети | EN + RU |
+| [`social/content-plan.md`](social/content-plan.md) | Контент-план на 4 недели | RU |
+| [`social/post-templates.md`](social/post-templates.md) | Подписи к постам и хэштеги | EN + RU |
+| [`tracker/commissions.csv`](tracker/commissions.csv) | Трекер заказов (открывается в Excel / Google Sheets) | — |
+
+## План запуска (по порядку)
+
+1. **Оплата.** Завести PayPal (Казахстан), привязать Visa/Mastercard, проверить, что вывод работает → [`payments-kz.md`](commissions/payments-kz.md).
+2. **Портфолио на английском.** Перевести текст на 2–3 реф-листах (Джек, Леонида, Генри) на английский.
+3. **Примеры под каждый тип заказа.** Минимум 1 пример на каждую позицию прайса.
+4. **Профили.** Обновить био везде, завести X/Twitter + Bluesky + VGen → [`bios.md`](social/bios.md).
+5. **Commission sheet.** Собрать картинку-прайс (Canva / Clip Studio) по тексту из [`commission-sheet.md`](commissions/commission-sheet.md).
+6. **2 недели регулярных постов** до открытия, чтобы профиль не выглядел пустым.
+7. **Открыть 3–5 слотов**, не больше. Первые клиенты = отзывы и примеры.
