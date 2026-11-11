@@ -4,7 +4,7 @@
 
 **Открытие комишек**
 > 🖋 COMMISSIONS OPEN 🖋
-> 5 slots · greyscale & sketch · OCs, D&D characters, ref sheets
+> 3 slots · greyscale & sketch · OCs, D&D characters, ref sheets
 > Prices start at $8!
 > Info & form ↓ [link]
 > RTs are super appreciated ❤️
@@ -23,7 +23,7 @@
 **Готовый заказ**
 > Commission for @[client] — thank you so much! ❤️
 > [Character name] was so fun to draw!
-> Slots: [X/5] left
+> Slots: [X/3] left
 
 **Слоты закрыты**
 > Slots are full! Thank you so much for the support 🥹 I'll open again in [month].

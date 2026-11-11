@@ -39,34 +39,42 @@ const DEFAULT_TASKS = [
   'Завести Bluesky и VGen',
   'Сделать картинку-прайс (commission sheet)',
   'Поставить ссылку на страницу для клиентов в био',
-  '2 недели регулярных постов',
-  'Открыть 3–5 слотов 🚀',
+  '4 недели постов по плану (2 в неделю)',
+  'Открыть 3 слота 🚀',
 ];
 
 const PLAN = [
   { title: 'Неделя 1 — «Кто я»', items: [
-    ['Пн', 'Знакомство: коллаж из 4 лучших работ + «Hi, I\'m ToDy! I design characters 🖋». Закрепить.'],
+    ['Ср', 'Знакомство: коллаж из 4 лучших работ + «Hi, I\'m ToDy! I design characters 🖋». Закрепить.'],
+    ['Сб', 'TikTok/Reels: таймлапс любого скетча 15–30 сек'],
+  ]},
+  { title: 'Неделя 2 — «Кто я»', items: [
     ['Ср', 'Реф-лист Генри Маунтайна на английском'],
-    ['Пт', 'Разворот скетчбука (тушь)'],
-    ['📱', 'TikTok/Reels: таймлапс любого скетча 15–30 сек'],
+    ['Сб', 'Разворот скетчбука (тушь)'],
   ]},
-  { title: 'Неделя 2 — «Мой мир»', items: [
-    ['Пн', 'Реф Джека Инкблада (EN) + «He\'s from my project Turn the Lights Off»'],
+  { title: 'Неделя 3 — «Мой мир»', items: [
+    ['Ср', 'Реф Джека Инкблада (EN) + «He\'s from my project Turn the Lights Off»'],
+    ['Сб', 'D&D-арт (Escape the Legion) + «Tell me about your character 👇»'],
+  ]},
+  { title: 'Неделя 4 — «Мой мир»', items: [
     ['Ср', 'Пачка дудлов-стикеров + «Should I make these into commissions?»'],
-    ['Пт', 'D&D-арт (Escape the Legion) + «Tell me about your character 👇»'],
-    ['📱', 'TikTok: «Drawing my D&D character» — процесс'],
+    ['Сб', 'TikTok: «Drawing my D&D character» — процесс'],
   ]},
-  { title: 'Неделя 3 — Открытие комишек 🚀', items: [
-    ['Пн', '«Commissions OPEN — 5 slots» + commission sheet. Закрепить.'],
-    ['Ср', 'Пример реф-листа + «This could be YOUR OC 📋»'],
-    ['Пт', 'WIP первого заказа (если клиент разрешил) или новый скетч'],
-    ['📱', 'TikTok: «POV: you commission me»'],
+  { title: 'Неделя 5 — Открытие комишек 🚀', items: [
+    ['Ср', '«Commissions OPEN — 3 slots» + commission sheet. Закрепить.'],
+    ['Сб', 'Пример реф-листа + «This could be YOUR OC 📋»'],
   ]},
-  { title: 'Неделя 4 — Доверие', items: [
-    ['Пн', 'Готовый заказ + скрин отзыва клиента'],
-    ['Ср', 'Процесс: скетч → лайн → тени (карусель)'],
-    ['Пт', '«2 slots left!» или «Slots full, thank you! ❤️»'],
-    ['📱', 'TikTok: before/after — референс клиента → твой арт'],
+  { title: 'Неделя 6 — Открытие комишек 🚀', items: [
+    ['Ср', 'WIP первого заказа (если клиент разрешил) или новый скетч'],
+    ['Сб', 'TikTok: «POV: you commission me»'],
+  ]},
+  { title: 'Неделя 7 — Доверие', items: [
+    ['Ср', 'Готовый заказ + скрин отзыва клиента'],
+    ['Сб', 'Процесс: скетч → лайн → тени (карусель)'],
+  ]},
+  { title: 'Неделя 8 — Доверие', items: [
+    ['Ср', '«1 slot left!» или «Slots full, thank you! ❤️»'],
+    ['Сб', 'TikTok: before/after — референс клиента → твой арт'],
   ]},
 ];
 
@@ -82,7 +90,7 @@ const TEMPLATES = [
     { t: 'Задержка', text: "Hi [name]! Just a quick update: your commission is taking a bit longer than planned. I expect to send it by [date]. Sorry for the wait, and thank you for your patience!", tr: 'Небольшая задержка, отправлю к [дате].' },
   ]},
   { group: 'Подписи к постам', items: [
-    { t: 'Открытие комишек', text: '🖋 COMMISSIONS OPEN 🖋\n5 slots · greyscale & sketch · OCs, D&D characters, ref sheets\nPrices start at $8!\nInfo ↓ [link]\nRTs are super appreciated ❤️' },
+    { t: 'Открытие комишек', text: '🖋 COMMISSIONS OPEN 🖋\n3 slots · greyscale & sketch · OCs, D&D characters, ref sheets\nPrices start at $8!\nInfo ↓ [link]\nRTs are super appreciated ❤️' },
     { t: 'Реф-лист', text: 'Reference sheet for [Name] — [one line about the character] 📋\nWant one for your OC? Commissions are open ↓' },
     { t: 'Скетчбук', text: 'some sketchbook pages from this week ✏️ which one is your favourite?' },
     { t: 'D&D', text: 'My [class] from our campaign "[name]" 🐉\nDo you want me to draw YOUR character? DM me!' },
@@ -153,7 +161,7 @@ function freshData() {
     orders: [],
     tasks: DEFAULT_TASKS.map((text, i) => ({ id: 'default-' + i, text, done: false, updated: 0 })),
     checks: {},             // planItemId -> { v: bool, updated }
-    settings: { slots: 5, planStart: todayISO(), updated: 0 },
+    settings: { slots: 3, planStart: todayISO(), updated: 0 },
     created: t,
   };
 }
@@ -363,8 +371,8 @@ function planWeek() {
 
 /* ============================== calendar ============================== */
 
-const DAY_OFFSET = { 'Пн': 0, 'Ср': 2, 'Пт': 4, '📱': 5 };
-const POST_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri — reminders after the 4-week plan ends
+const DAY_OFFSET = { 'Пн': 0, 'Вт': 1, 'Ср': 2, 'Чт': 3, 'Пт': 4, 'Сб': 5, 'Вс': 6, '📱': 5 };
+const POST_WEEKDAYS = [3, 6]; // Wed, Sat — reminders after the plan ends
 
 function calEvents(fromISO, toISO) {
   const ev = {};
@@ -587,13 +595,21 @@ views.content = () => {
   const wk = planWeek();
   return `
   <h1>Контент-план</h1>
-  <p class="muted">3 поста в неделю + короткие видео. Лучшее время для англоязычной аудитории — <b>19:00–23:00 по Астане</b>. Каждый пост: картинка + 1–2 предложения + 3–5 хэштегов.</p>
+  <p class="muted">Спокойный темп для учёбы: <b>2 поста в неделю — в среду и субботу</b>. Лучшее время для англоязычной аудитории — <b>19:00–23:00 по Астане</b>. Каждый пост: картинка + 1–2 предложения + 3–5 хэштегов.</p>
   <div class="row"><span class="muted small">План начат: ${esc(data.settings.planStart)}</span><span class="spacer"></span><button class="btn small" data-act="plan-reset">Начать заново с сегодня</button></div>
   ${PLAN.map((w, i) => `
     <div class="card" style="margin-top:12px; ${i === wk ? 'border-color: var(--accent)' : ''}">
       <div class="row"><h3 style="margin:0">${esc(w.title)}</h3>${i === wk ? '<span class="badge red">сейчас</span>' : ''}</div>
       ${planItems(i)}
     </div>`).join('')}
+
+  <h2>Как экономить время</h2>
+  <div class="card stack small">
+    <div>• Один арт = два поста: финал в среду, таймлапс/процесс того же арта в субботу</div>
+    <div>• Всегда записывай экран во время рисования (Clip Studio / Procreate) — видео для TikTok почти бесплатно</div>
+    <div>• Один пост выкладывай сразу везде: X, Bluesky, Instagram, Telegram</div>
+    <div>• Сессия? Напиши «exams, back in 2 weeks!» и закрой слоты — это нормально</div>
+  </div>
 
   <h2>Где что постить</h2>
   <div class="card stack small">
