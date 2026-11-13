@@ -20,15 +20,10 @@ const STATUSES = [
 ];
 const ACTIVE = ['request', 'invoice', 'sketch', 'final'];
 
-const PRICES = {
-  'Doodle': { Sketch: 8 },
-  'Bust': { Sketch: 12, Greyscale: 18 },
-  'Half body': { Sketch: 18, Greyscale: 28 },
-  'Full body': { Sketch: 28, Greyscale: 40 },
-  'Reference sheet': { Greyscale: 75 },
-  'D&D character': { Greyscale: 50 },
-  'Другое': {},
-};
+const LS_SITE = 'tody.site.v1';
+/* Where the public site (and its site.json) lives. Pages is built from this branch/folder. */
+const SITE_DEFAULTS = { siteRepo: 'Yoyo', siteBranch: 'claude/social-media-commissions-l03dgx', siteDir: 'docs' };
+const WD = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
 const DEFAULT_TASKS = [
   'Завести PayPal (Kazakhstan, Business), привязать Visa/Mastercard',
@@ -90,11 +85,11 @@ const TEMPLATES = [
     { t: 'Задержка', text: "Hi [name]! Just a quick update: your commission is taking a bit longer than planned. I expect to send it by [date]. Sorry for the wait, and thank you for your patience!", tr: 'Небольшая задержка, отправлю к [дате].' },
   ]},
   { group: 'Подписи к постам', items: [
-    { t: 'Открытие комишек', text: '🖋 COMMISSIONS OPEN 🖋\n3 slots · greyscale & sketch · OCs, D&D characters, ref sheets\nPrices start at $8!\nInfo ↓ [link]\nRTs are super appreciated ❤️' },
+    { t: 'Открытие комишек', text: '🖋 COMMISSIONS OPEN 🖋\n{slots} slots · greyscale & sketch · OCs, D&D characters, ref sheets\nPrices start at {min}!\nInfo ↓ [link]\nRTs are super appreciated ❤️' },
     { t: 'Реф-лист', text: 'Reference sheet for [Name] — [one line about the character] 📋\nWant one for your OC? Commissions are open ↓' },
     { t: 'Скетчбук', text: 'some sketchbook pages from this week ✏️ which one is your favourite?' },
     { t: 'D&D', text: 'My [class] from our campaign "[name]" 🐉\nDo you want me to draw YOUR character? DM me!' },
-    { t: 'Готовый заказ', text: 'Commission for @[client] — thank you so much! ❤️\n[Character name] was so fun to draw!\nSlots: [X/5] left' },
+    { t: 'Готовый заказ', text: 'Commission for @[client] — thank you so much! ❤️\n[Character name] was so fun to draw!\nSlots: [X/{slots}] left' },
     { t: 'Слоты закрыты', text: "Slots are full! Thank you so much for the support 🥹 I'll open again in [month]." },
   ]},
   { group: 'Хэштеги', items: [
@@ -161,7 +156,7 @@ function freshData() {
     orders: [],
     tasks: DEFAULT_TASKS.map((text, i) => ({ id: 'default-' + i, text, done: false, updated: 0 })),
     checks: {},             // planItemId -> { v: bool, updated }
-    settings: { slots: 3, planStart: todayISO(), updated: 0 },
+    settings: { name: 'ToDy', slots: 3, postDays: [3, 6], postTime: '19:00–23:00', planStart: todayISO(), updated: 0 },
     created: t,
   };
 }
@@ -246,9 +241,12 @@ const b64decode = (b64) => {
   return new TextDecoder().decode(bytes);
 };
 
-async function gh(conf, method, body) {
-  const url = `https://api.github.com/repos/${encodeURIComponent(conf.owner)}/${encodeURIComponent(conf.repo)}/contents/${conf.path.split('/').map(encodeURIComponent).join('/')}`;
-  const res = await fetch(method === 'GET' ? url + '?t=' + now() : url, {
+function gh(conf, method, body) { return ghApi(conf, conf.repo, conf.path, method, body); }
+
+async function ghApi(conf, repo, path, method = 'GET', body = null, ref = null) {
+  let url = `https://api.github.com/repos/${encodeURIComponent(conf.owner)}/${encodeURIComponent(repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+  if (method === 'GET') url += '?' + (ref ? 'ref=' + encodeURIComponent(ref) + '&' : '') + 't=' + now();
+  const res = await fetch(url, {
     method,
     headers: {
       Authorization: 'Bearer ' + conf.token,
@@ -339,6 +337,143 @@ async function sync() {
   }
 }
 
+/* ============================== public site config ============================== */
+
+let site = (() => { try { return JSON.parse(localStorage.getItem(LS_SITE) || 'null'); } catch { return null; } })();
+let siteDraft = null;          // copy being edited in Settings
+let siteDirty = false;
+let siteBusy = '';             // publish progress text
+const imgPreview = new Map();  // src -> dataURL, so freshly uploaded images show before Pages rebuilds
+
+function siteConf() { const c = ghConf(); return c ? { ...SITE_DEFAULTS, ...c } : null; }
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+function setSite(c) {
+  site = c;
+  try { localStorage.setItem(LS_SITE, JSON.stringify(c)); } catch {}
+  if (typeof refreshOrderSelects === 'function') refreshOrderSelects();
+}
+
+async function loadSite() {
+  let fresh = null;
+  const c = siteConf();
+  try {
+    if (c) {
+      const res = await ghApi(c, c.siteRepo, `${c.siteDir}/site.json`, 'GET', null, c.siteBranch);
+      if (res.ok) fresh = JSON.parse(b64decode((await res.json()).content));
+    }
+  } catch {}
+  if (!fresh) {
+    try { const r = await fetch('site.json?t=' + now(), { cache: 'no-store' }); if (r.ok) fresh = await r.json(); } catch {}
+  }
+  if (fresh && canon(fresh) !== canon(site)) {
+    setSite(fresh);
+    if (!siteDirty) { siteDraft = null; render(); }
+  }
+}
+
+async function ghSha(c, path) {
+  const res = await ghApi(c, c.siteRepo, path, 'GET', null, c.siteBranch);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await siteErr(res));
+  return (await res.json()).sha;
+}
+
+async function putFile(c, path, b64, message) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const sha = await ghSha(c, path);
+    const res = await ghApi(c, c.siteRepo, path, 'PUT', { message, content: b64, branch: c.siteBranch, ...(sha ? { sha } : {}) });
+    if (res.ok) return;
+    if (res.status !== 409 && res.status !== 422) throw new Error(await siteErr(res));
+  }
+  throw new Error('Конфликт при сохранении, попробуй ещё раз');
+}
+
+async function deleteFile(c, path, message) {
+  const sha = await ghSha(c, path);
+  if (!sha) return;
+  const res = await ghApi(c, c.siteRepo, path, 'DELETE', { message, sha, branch: c.siteBranch });
+  if (!res.ok && res.status !== 404) throw new Error(await siteErr(res));
+}
+
+async function siteErr(res) {
+  if (res.status === 403 || res.status === 404) {
+    return `Ключ не имеет доступа к репозиторию «${siteConf().siteRepo}» (${res.status}).\n\n` +
+      'Открой github.com/settings/personal-access-tokens → свой токен → Edit → Repository access → добавь Yoyo → Update. Права: Contents — Read and write.';
+  }
+  return errText(res);
+}
+
+async function publishSite() {
+  const c = siteConf();
+  if (!c) { alert('Чтобы публиковать изменения, сначала подключи GitHub (внизу этой страницы).'); return; }
+  const draft = siteDraft;
+  const dir = c.siteDir ? c.siteDir.replace(/\/+$/, '') + '/' : '';
+  const step = (t) => { siteBusy = t; updateDirtyUI(); };
+  try {
+    const fresh = draft.gallery.filter((g) => g.pending);
+    for (let i = 0; i < fresh.length; i++) {
+      step(`Загружаю фото ${i + 1}/${fresh.length}…`);
+      const g = fresh[i];
+      const name = `img/u-${now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`;
+      await putFile(c, dir + name, g.pending.split(',')[1], 'Add artwork image');
+      imgPreview.set(name, g.pending);
+      g.src = name;
+      delete g.pending;
+    }
+    const keep = new Set(draft.gallery.map((g) => g.src));
+    const removed = ((site && site.gallery) || []).map((g) => g.src).filter((s) => s && s.startsWith('img/') && !keep.has(s));
+    for (const src of removed) { step('Удаляю убранные фото…'); await deleteFile(c, dir + src, 'Remove artwork image'); }
+    step('Сохраняю страницу…');
+    const clean = clone(draft);
+    await putFile(c, dir + 'site.json', b64encode(JSON.stringify(clean, null, 1) + '\n'), 'Update commission page settings');
+    setSite(clean);
+    siteDirty = false;
+    siteDraft = null;
+    toast('Опубликовано ✓ Страница обновится через 1–2 мин');
+    render();
+  } catch (e) {
+    alert('Не получилось опубликовать:\n' + (e.message || e));
+  } finally {
+    siteBusy = '';
+    updateDirtyUI();
+  }
+}
+
+function minPrice() {
+  const c = site || {};
+  const all = (c.prices || []).flatMap((r) => (c.styles || []).map((st) => r.prices && r.prices[st]))
+    .filter((v) => v !== null && v !== undefined && v !== '').map(Number);
+  return all.length ? (c.currency || '$') + Math.min(...all) : '$8';
+}
+const fillTpl = (text) => text.replaceAll('{min}', minPrice()).replaceAll('{slots}', String(data.settings.slots));
+
+/* ---------- images ---------- */
+
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось открыть ' + file.name)); };
+    im.src = url;
+  });
+}
+
+/* Shrink to max 1600px on the long side and re-encode as JPEG: keeps the repo and page light. */
+async function toJpeg(file, max = 1600) {
+  const im = await readImage(file);
+  const w0 = im.naturalWidth, h0 = im.naturalHeight;
+  const k = Math.min(1, max / Math.max(w0, h0));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w0 * k); cv.height = Math.round(h0 * k);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(im, 0, 0, cv.width, cv.height);
+  URL.revokeObjectURL(im.src);
+  return { dataUrl: cv.toDataURL('image/jpeg', 0.86), wide: w0 / h0 > 1.25 };
+}
+
 /* ============================== stats ============================== */
 
 function liveOrders() { return data.orders.filter((o) => !o.deleted); }
@@ -371,8 +506,13 @@ function planWeek() {
 
 /* ============================== calendar ============================== */
 
-const DAY_OFFSET = { 'Пн': 0, 'Вт': 1, 'Ср': 2, 'Чт': 3, 'Пт': 4, 'Сб': 5, 'Вс': 6, '📱': 5 };
-const POST_WEEKDAYS = [3, 6]; // Wed, Sat — reminders after the plan ends
+/* Posting weekdays (0 = Sun … 6 = Sat), Monday-first. Plan item i of a week goes to postDays[i]. */
+function postDays() {
+  const d = [...new Set((data.settings.postDays || []).map(Number).filter((x) => x >= 0 && x <= 6))];
+  return (d.length ? d : [3, 6]).sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+}
+const planItemDay = (i) => { const d = postDays(); return d[i % d.length]; };
+const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 
 function calEvents(fromISO, toISO) {
   const ev = {};
@@ -382,15 +522,16 @@ function calEvents(fromISO, toISO) {
     if (o.status === 'done' && o.doneDate && o.doneDate >= fromISO && o.doneDate <= toISO) at(o.doneDate).done.push(o);
   }
   const mon = planMonday();
-  PLAN.forEach((w, wi) => w.items.forEach(([day, text], i) => {
-    const d = addDays(mon, wi * 7 + (DAY_OFFSET[day] ?? 0));
+  PLAN.forEach((w, wi) => w.items.forEach(([, text], i) => {
+    const wd = planItemDay(i);
+    const d = addDays(mon, wi * 7 + (wd + 6) % 7);
     if (d < fromISO || d > toISO) return;
     const id = `w${wi}-${i}`;
-    at(d).posts.push({ id, day, text, done: !!(data.checks[id] && data.checks[id].v) });
+    at(d).posts.push({ id, day: WD[wd], text, done: !!(data.checks[id] && data.checks[id].v) });
   }));
   const planEnd = addDays(mon, PLAN.length * 7);
   for (let d = fromISO > planEnd ? fromISO : planEnd; d <= toISO; d = addDays(d, 1)) {
-    if (POST_WEEKDAYS.includes(parseISO(d).getDay())) at(d).reminder = true;
+    if (postDays().includes(parseISO(d).getDay())) at(d).reminder = true;
   }
   return ev;
 }
@@ -434,7 +575,7 @@ function calendarView() {
         <input type="checkbox" data-act="plan" data-id="${p.id}" ${p.done ? 'checked' : ''}>
         <span class="day">${esc(p.day)}</span><span class="txt">${esc(p.text)}</span>
       </label>`).join('');
-    if (se.reminder && !se.posts.length) details += '<div class="cal-item static">✏️ <span>День поста: выложи арт, скетч или WIP (19:00–23:00)</span></div>';
+    if (se.reminder && !se.posts.length) details += `<div class="cal-item static">✏️ <span>День поста: выложи арт, скетч или WIP (${esc(data.settings.postTime)})</span></div>`;
   }
   if (!details) details = '<div class="muted small" style="padding:6px 0">Ничего не запланировано</div>';
 
@@ -469,6 +610,7 @@ function render() {
   if (!views[tab]) tab = 'home';
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $('#view').innerHTML = views[tab]();
+  updateDirtyUI();
   window.scrollTo({ top: Math.min(window.scrollY, document.body.scrollHeight) });
 }
 
@@ -520,7 +662,7 @@ views.home = () => {
   const tasks = data.tasks.filter((t) => !t.deleted);
   const tasksDone = tasks.filter((t) => t.done).length;
   return `
-  <h1>Привет, ToDy 👋</h1>
+  <h1>Привет, ${esc(data.settings.name || 'ToDy')} 👋</h1>
   <div class="grid stats">
     <div class="card stat"><div class="num">${s.active.length}</div><div class="lbl">активных заказов</div></div>
     <div class="card stat accent"><div class="num">${s.slotsLeft}/${esc(data.settings.slots)}</div><div class="lbl">свободных слотов</div></div>
@@ -560,7 +702,8 @@ views.home = () => {
 };
 
 function planItems(w) {
-  return PLAN[w].items.map(([day, text], i) => {
+  return PLAN[w].items.map(([, text], i) => {
+    const day = WD[planItemDay(i)];
     const id = `w${w}-${i}`;
     const on = !!(data.checks[id] && data.checks[id].v);
     return `
@@ -595,7 +738,7 @@ views.content = () => {
   const wk = planWeek();
   return `
   <h1>Контент-план</h1>
-  <p class="muted">Спокойный темп для учёбы: <b>2 поста в неделю — в среду и субботу</b>. Лучшее время для англоязычной аудитории — <b>19:00–23:00 по Астане</b>. Каждый пост: картинка + 1–2 предложения + 3–5 хэштегов.</p>
+  <p class="muted">Темп: <b>${postDays().length} ${plural(postDays().length, 'пост', 'поста', 'постов')} в неделю — ${postDays().map((d) => WD[d]).join(', ')}</b>, время: <b>${esc(data.settings.postTime)}</b> (меняется в Настройках). Каждый пост: картинка + 1–2 предложения + 3–5 хэштегов.</p>
   <div class="row"><span class="muted small">План начат: ${esc(data.settings.planStart)}</span><span class="spacer"></span><button class="btn small" data-act="plan-reset">Начать заново с сегодня</button></div>
   ${PLAN.map((w, i) => `
     <div class="card" style="margin-top:12px; ${i === wk ? 'border-color: var(--accent)' : ''}">
@@ -605,7 +748,7 @@ views.content = () => {
 
   <h2>Как экономить время</h2>
   <div class="card stack small">
-    <div>• Один арт = два поста: финал в среду, таймлапс/процесс того же арта в субботу</div>
+    <div>• Один арт = два поста: финал в один день постов, таймлапс/процесс того же арта — в следующий</div>
     <div>• Всегда записывай экран во время рисования (Clip Studio / Procreate) — видео для TikTok почти бесплатно</div>
     <div>• Один пост выкладывай сразу везде: X, Bluesky, Instagram, Telegram</div>
     <div>• Сессия? Напиши «exams, back in 2 weeks!» и закрой слоты — это нормально</div>
@@ -637,7 +780,7 @@ views.templates = () => `
       ${g.items.map((it, ii) => `
         <div class="card tpl">
           <div class="row"><h3 style="margin:0">${esc(it.t)}</h3><span class="spacer"></span><button class="btn small" data-act="copy" data-g="${gi}" data-i="${ii}">Копировать</button></div>
-          <pre>${esc(it.text)}</pre>
+          <pre>${esc(fillTpl(it.text))}</pre>
           ${it.tr ? `<div class="tr">${esc(it.tr)}</div>` : ''}
         </div>`).join('')}
     </div>`).join('')}
@@ -651,66 +794,247 @@ views.templates = () => `
     <div>• «I'm interested in your art, contact me on WhatsApp/email» без деталей</div>
   </div>`;
 
+/* ---------- settings ---------- */
+
+const openSecs = new Set(['me']);   // which <details> sections are expanded
+const sec = (id, title, body, note = '') => `
+  <details class="card sec" data-sec="${id}" ${openSecs.has(id) ? 'open' : ''}>
+    <summary><span>${title}</span>${note ? `<span class="muted small">${note}</span>` : ''}</summary>
+    <div class="sec-body">${body}</div>
+  </details>`;
+
+/* An input bound to a path inside the site draft, e.g. data-sp="prices.2.name". */
+const sp = (path, val, { type = 'text', ph = '', cls = '', attrs = '' } = {}) =>
+  `<input data-sp="${path}" data-t="${type === 'number' ? 'num' : 'text'}" type="${type}" value="${esc(val ?? '')}" placeholder="${esc(ph)}" class="${cls}" ${type === 'number' ? 'inputmode="decimal" step="any"' : ''} ${attrs}>`;
+
+function siteEditor() {
+  const d = siteDraft;
+  const t = d.terms || (d.terms = {});
+  const cur = d.currency || '$';
+
+  const main = `
+    <label class="switch"><input type="checkbox" data-sp="open" data-t="bool" ${d.open ? 'checked' : ''}><span>Комишки <b>открыты</b> (если выключить — страница покажет CLOSED и спрячет форму)</span></label>
+    <div class="form-grid" style="margin-top:10px">
+      <div><label>Имя / ник</label>${sp('name', d.name)}</div>
+      <div><label>Валюта</label>${sp('currency', d.currency, { ph: '$' })}</div>
+      <div class="full"><label>Подзаголовок</label>${sp('tagline', d.tagline)}</div>
+      <div class="full"><label>Как тебя отмечать (credit)</label>${sp('credit', d.credit, { ph: '@nickname' })}</div>
+    </div>`;
+
+  const gallery = `
+    <p class="muted small" style="margin-top:0">Первые картинки клиенты видят сразу — ставь лучшие наверх. «Широкая» — на две колонки (для рефов и горизонтальных работ). Фото автоматически сжимаются до 1600px.</p>
+    <div class="thumbs">
+      ${d.gallery.map((g, i) => `
+        <div class="thumb ${g.wide ? 'wide' : ''}">
+          <div class="img"><img src="${esc(g.pending || imgPreview.get(g.src) || g.src)}" alt="" loading="lazy">${g.pending ? '<span class="badge yellow new">новое</span>' : ''}</div>
+          <input data-sp="gallery.${i}.alt" data-t="text" value="${esc(g.alt || '')}" placeholder="Подпись (необязательно)">
+          <div class="row tools">
+            <button class="btn small ghost" data-act="img-move" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} title="Раньше">↑</button>
+            <button class="btn small ghost" data-act="img-move" data-i="${i}" data-dir="1" ${i === d.gallery.length - 1 ? 'disabled' : ''} title="Позже">↓</button>
+            <label class="mini"><input type="checkbox" data-sp="gallery.${i}.wide" data-t="bool" data-rerender="1" ${g.wide ? 'checked' : ''}> широкая</label>
+            <span class="spacer"></span>
+            <button class="btn small ghost danger" data-act="img-del" data-i="${i}" title="Убрать">✕</button>
+          </div>
+        </div>`).join('')}
+      <label class="thumb add">
+        <input type="file" accept="image/*" multiple data-act="img-add" hidden>
+        <span>＋<br>Добавить фото</span>
+      </label>
+    </div>`;
+
+  const prices = `
+    <div class="row" style="margin-bottom:8px"><span class="muted small">Колонки (стили):</span>
+      ${d.styles.map((st) => `<span class="chip">${esc(st)} <button class="x" data-act="style-del" data-s="${esc(st)}" title="Убрать колонку">✕</button></span>`).join('')}
+      <span class="row" style="gap:4px"><input id="newStyle" placeholder="напр. Flat color" style="width:150px;min-height:34px;padding:4px 10px"><button class="btn small" data-act="style-add">+ колонка</button></span>
+    </div>
+    <div class="stack">
+      ${d.prices.map((r, i) => `
+        <div class="price-edit ${r.star ? 'star' : ''}">
+          <div class="row">
+            ${sp(`prices.${i}.name`, r.name, { ph: 'Название', cls: 'grow' })}
+            <button class="btn small ghost" data-act="price-move" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button class="btn small ghost" data-act="price-move" data-i="${i}" data-dir="1" ${i === d.prices.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="btn small ghost danger" data-act="price-del" data-i="${i}">✕</button>
+          </div>
+          ${sp(`prices.${i}.desc`, r.desc, { ph: 'Описание (необязательно)' })}
+          <div class="row">
+            ${d.styles.map((st) => `<label class="pr"><span>${esc(st)}, ${esc(cur)}</span>${sp(`prices.${i}.prices.${st}`, r.prices && r.prices[st], { type: 'number', ph: '—' })}</label>`).join('')}
+            <label class="mini"><input type="checkbox" data-sp="prices.${i}.star" data-t="bool" data-rerender="1" ${r.star ? 'checked' : ''}> ⭐ выделить</label>
+          </div>
+        </div>`).join('')}
+    </div>
+    <button class="btn small" data-act="price-add" style="margin-top:10px">+ Добавить позицию</button>
+    <p class="muted small">Пустая цена = «—» (этот стиль недоступен). Эти же позиции и цены подставляются в новые заказы.</p>`;
+
+  const extras = `
+    <label>Доп. опции — по одной на строку</label>
+    <textarea data-sp="extras" data-t="lines" rows="6">${esc((d.extras || []).join('\n'))}</textarea>
+    <div class="form-grid" style="margin-top:10px">
+      <div class="full"><label>✅ Рисую</label><textarea data-sp="willDraw" data-t="text" rows="2">${esc(d.willDraw)}</textarea></div>
+      <div class="full"><label>❌ Не рисую</label><textarea data-sp="wontDraw" data-t="text" rows="2">${esc(d.wontDraw)}</textarea></div>
+    </div>`;
+
+  const terms = `
+    <p class="muted small" style="margin-top:0">Эти значения подставляются в «How to order» и в правила (ToS) на странице.</p>
+    <div class="form-grid">
+      <div><label>Срок выполнения</label>${sp('terms.turnaround', t.turnaround, { ph: '2–4 weeks' })}</div>
+      <div><label>Отвечаю в течение, часов</label>${sp('terms.replyHours', t.replyHours, { type: 'number' })}</div>
+      <div><label>Бесплатных правок на скетче</label>${sp('terms.revisions', t.revisions, { type: 'number' })}</div>
+      <div><label>Полная предоплата для заказов до, ${esc(cur)}</label>${sp('terms.fullUpfrontUnder', t.fullUpfrontUnder, { type: 'number' })}</div>
+      <div><label>Дней на оплату счёта</label>${sp('terms.payDays', t.payDays, { type: 'number' })}</div>
+      <div><label>Срочный заказ — если меньше, дней</label>${sp('terms.rushDays', t.rushDays, { type: 'number' })}</div>
+      <div><label>Доплата за срочность</label>${sp('terms.rush', t.rush, { ph: '+30%' })}</div>
+      <div><label>Изменения после скетча</label>${sp('terms.extraChange', t.extraChange, { ph: '+$5–15' })}</div>
+      <div><label>Коммерческое использование</label>${sp('terms.commercial', t.commercial, { ph: '×2' })}</div>
+      <div><label>Приватный заказ (не постить)</label>${sp('terms.privateFee', t.privateFee, { ph: '+20%' })}</div>
+      <div><label>Мин. размер файла, px</label>${sp('terms.minResolution', t.minResolution, { type: 'number' })}</div>
+      <div><label>Храню файлы, месяцев</label>${sp('terms.storeMonths', t.storeMonths, { type: 'number' })}</div>
+    </div>`;
+
+  const links = `
+    <div class="stack">
+      ${d.links.map((l, i) => `
+        <div class="row">
+          ${sp(`links.${i}.label`, l.label, { ph: 'Название', cls: 'lbl-in' })}
+          ${sp(`links.${i}.url`, l.url, { type: 'url', ph: 'https://…', cls: 'grow' })}
+          <button class="btn small ghost danger" data-act="link-del" data-i="${i}">✕</button>
+        </div>`).join('')}
+    </div>
+    <button class="btn small" data-act="link-add" style="margin-top:10px">+ Добавить ссылку</button>
+    <p class="muted small">Первые две ссылки показываются в «How to order» как куда писать в личку.</p>`;
+
+  return [
+    sec('s-main', '⚙️ Основное', main, d.open ? 'открыты' : 'закрыты'),
+    sec('s-gallery', '🖼 Примеры работ', gallery, `${d.gallery.length} шт.`),
+    sec('s-prices', '💲 Прайс', prices, `${d.prices.length} поз.`),
+    sec('s-extras', '➕ Доп. опции и что рисую', extras),
+    sec('s-terms', '📜 Условия и сроки', terms, esc(t.turnaround || '')),
+    sec('s-links', '🔗 Ссылки', links, `${d.links.length}`),
+  ].join('');
+}
+
 views.settings = () => {
-  const c = ghConf();
+  const c = siteConf();
+  const st = data.settings;
   const clientUrl = new URL('commissions.html', location.href).href;
+  if (!siteDirty || !siteDraft) siteDraft = clone(site || {});
+  for (const k of ['styles', 'prices', 'extras', 'links', 'gallery']) if (!Array.isArray(siteDraft[k])) siteDraft[k] = [];
+
+  const me = `
+    <div class="form-grid">
+      <div><label>Как тебя называть</label><input data-act="set" data-k="name" value="${esc(st.name || '')}"></div>
+      <div><label>Слотов (заказов одновременно)</label><input type="number" min="1" max="30" data-act="set" data-k="slots" value="${esc(st.slots)}"></div>
+      <div class="full"><label>Дни постов</label>
+        <div class="chips">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="chip ${postDays().includes(d) ? 'active' : ''}" data-act="post-day" data-d="${d}">${WD[d]}</button>`).join('')}</div>
+      </div>
+      <div><label>Время постов</label><input data-act="set" data-k="postTime" value="${esc(st.postTime || '')}" placeholder="19:00–23:00"></div>
+      <div><label>Начало контент-плана</label><input type="date" data-act="set" data-k="planStart" value="${esc(st.planStart || '')}"></div>
+    </div>
+    <p class="muted small">Дни постов задают календарь и контент-план: 1-й пост недели — в первый выбранный день, 2-й — во второй.</p>`;
+
   return `
   <h1>Настройки</h1>
 
-  <h2>Страница для клиентов</h2>
-  <div class="card stack">
-    <div>Публичная страница на английском: прайс, примеры, правила. Ставь эту ссылку в био.</div>
-    <div class="row"><input readonly value="${esc(clientUrl)}" style="flex:1"><button class="btn small" data-act="copy-text" data-text="${esc(clientUrl)}">Копировать</button><a class="btn small" href="commissions.html" target="_blank">Открыть</a></div>
-  </div>
+  <h2>Мои параметры</h2>
+  ${sec('me', '🙂 Имя, слоты, дни постов', me)}
 
-  <h2>Слоты</h2>
-  <div class="card row">
-    <label style="margin:0">Сколько заказов одновременно</label>
-    <span class="spacer"></span>
-    <input type="number" min="1" max="30" value="${esc(data.settings.slots)}" data-act="slots" style="width:90px">
-  </div>
+  <div class="row" style="margin-top:1.4em"><h2 style="margin:0">Страница для клиентов</h2><span class="spacer"></span><a class="btn small" href="commissions.html" target="_blank">Открыть ↗</a></div>
+  <div class="row" style="margin:10px 0"><input readonly value="${esc(clientUrl)}" style="flex:1"><button class="btn small" data-act="copy-text" data-text="${esc(clientUrl)}">Копировать ссылку</button></div>
+  ${site ? `<div class="stack">${siteEditor()}</div>` : '<div class="card empty">Загружаю настройки страницы…</div>'}
+  ${c ? '' : '<p class="muted small">✏️ Редактировать можно и без GitHub, но чтобы <b>опубликовать</b> изменения, подключи синхронизацию ниже.</p>'}
 
   <h2>Синхронизация через GitHub</h2>
   <div class="card stack">
     ${c ? `
-      <div>✅ Подключено: <code>${esc(c.owner)}/${esc(c.repo)}</code> → <code>${esc(c.path)}</code></div>
+      <div>✅ Подключено: заказы — <code>${esc(c.owner)}/${esc(c.repo)}</code>, страница — <code>${esc(c.owner)}/${esc(c.siteRepo)}</code></div>
       <div class="muted small">${esc(syncState.msg)}</div>
       <div class="row"><button class="btn primary" data-act="sync-now">Синхронизировать сейчас</button><button class="btn danger" data-act="gh-off">Отключить на этом устройстве</button></div>
+      <details>
+        <summary class="small"><b>Ключ подключён давно и публикация страницы не работает?</b></summary>
+        <ol class="steps small">
+          <li>Открой <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → свой токен → <b>Edit</b>.</li>
+          <li>Repository access → добавь <code>${esc(c.siteRepo)}</code> (рядом с <code>${esc(c.repo)}</code>).</li>
+          <li>Permissions → <b>Contents: Read and write</b> → <b>Update</b>. Новый ключ вставлять не нужно.</li>
+        </ol>
+      </details>
+      <details>
+        <summary class="small"><b>Где лежит сайт</b> (менять, только если переносишь сайт)</summary>
+        <form class="form-grid" data-act="site-loc" style="margin-top:8px">
+          <div><label>Репозиторий сайта</label><input name="siteRepo" value="${esc(c.siteRepo)}" required></div>
+          <div><label>Папка</label><input name="siteDir" value="${esc(c.siteDir)}"></div>
+          <div class="full"><label>Ветка (из которой собирается GitHub Pages)</label><input name="siteBranch" value="${esc(c.siteBranch)}" required></div>
+          <div class="full"><button class="btn small">Сохранить</button></div>
+        </form>
+      </details>
     ` : `
-      <div>Сейчас данные хранятся <b>только в этом браузере</b>. Подключи GitHub, чтобы заказы были одинаковые на телефоне и ПК.</div>
+      <div>Сейчас заказы хранятся <b>только в этом браузере</b>, а изменения страницы для клиентов нельзя опубликовать. Подключи GitHub — один раз на каждом устройстве.</div>
       <details>
         <summary><b>Как подключить (один раз, ~5 минут)</b></summary>
         <ol class="steps">
           <li>Создай <b>приватный</b> репозиторий: <a href="https://github.com/new?name=Yoyo-data&visibility=private" target="_blank" rel="noopener">github.com/new</a> → имя <code>Yoyo-data</code> → <b>Private</b> → Create.</li>
-          <li>Создай токен: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>
+          <li>Создай ключ (токен): <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>
             <ul>
               <li>Token name: <code>ToDy workspace</code></li>
               <li>Expiration: на сколько хочешь (например, 1 год)</li>
-              <li>Repository access: <b>Only select repositories</b> → <code>Yoyo-data</code></li>
+              <li>Repository access: <b>Only select repositories</b> → выбери <code>Yoyo-data</code> <b>и</b> <code>Yoyo</code></li>
               <li>Permissions → Repository permissions → <b>Contents: Read and write</b></li>
               <li>Generate token → скопируй его (начинается на <code>github_pat_</code>)</li>
             </ul>
           </li>
-          <li>Вставь токен ниже и нажми «Подключить».</li>
-          <li>На телефоне открой этот же сайт и повтори шаг 3 с тем же токеном.</li>
+          <li>Вставь ключ ниже и нажми «Подключить».</li>
+          <li>На телефоне открой этот же сайт и повтори шаг 3 с тем же ключом.</li>
         </ol>
-        <p class="muted small">Токен хранится только в браузере на твоём устройстве и даёт доступ только к <code>Yoyo-data</code>. Никому его не показывай. Если потеряешь телефон — удали токен на github.com/settings/tokens.</p>
+        <p class="muted small">Ключ хранится только в браузере на твоём устройстве и даёт доступ только к этим двум репозиториям. Никому его не показывай. Потерял(а) телефон — удали ключ на github.com/settings/tokens.</p>
       </details>
       <form class="form-grid" data-act="gh-on">
         <div><label>Владелец (GitHub ник)</label><input name="owner" value="ToDyHehe" required></div>
         <div><label>Приватный репозиторий</label><input name="repo" value="Yoyo-data" required></div>
-        <div class="full"><label>Токен</label><input name="token" type="password" placeholder="github_pat_…" required autocomplete="off"></div>
+        <div class="full"><label>Ключ (токен)</label><input name="token" type="password" placeholder="github_pat_…" required autocomplete="off"></div>
         <div class="full"><button class="btn primary">Подключить</button></div>
       </form>
     `}
   </div>
 
-  <h2>Резервная копия</h2>
+  <h2>Резервная копия заказов</h2>
   <div class="card row">
     <button class="btn" data-act="export">Скачать данные (.json)</button>
     <label class="btn" style="margin:0; color:var(--text); font-size:inherit">Загрузить из файла<input type="file" accept="application/json" data-act="import" hidden></label>
-  </div>`;
+  </div>
+  <div style="height:70px"></div>`;
 };
+
+/* Bottom bar with Publish / Discard — updated without re-rendering so typing isn't interrupted. */
+function updateDirtyUI() {
+  let bar = document.getElementById('publishBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'publishBar';
+    bar.className = 'publish-bar';
+    document.body.appendChild(bar);
+    bar.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b || siteBusy) return;
+      if (b.dataset.do === 'publish') publishSite();
+      if (b.dataset.do === 'discard' && confirm('Отменить все неопубликованные изменения страницы?')) {
+        siteDirty = false; siteDraft = null; render();
+      }
+    });
+  }
+  const show = tab === 'settings' && (siteDirty || siteBusy);
+  bar.classList.toggle('show', !!show);
+  bar.innerHTML = siteBusy
+    ? `<span>⏳ ${esc(siteBusy)}</span>`
+    : `<span>Есть неопубликованные изменения</span><span class="spacer"></span><button class="btn small" data-do="discard">Отменить</button><button class="btn small primary" data-do="publish">Опубликовать</button>`;
+}
+
+function markDirty() { siteDirty = true; updateDirtyUI(); }
+
+function setPath(obj, path, val) {
+  const ks = path.split('.');
+  let o = obj;
+  for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]] ??= {};
+  o[ks[ks.length - 1]] = val;
+}
 
 /* ============================== order dialog ============================== */
 
@@ -718,12 +1042,27 @@ const dlg = $('#orderDlg');
 const form = $('#orderForm');
 let editingId = null;
 
-form.type.innerHTML = Object.keys(PRICES).map((t) => `<option>${t}</option>`).join('');
 form.status.innerHTML = STATUSES.map((s) => `<option value="${s.id}">${s.label}</option>`).join('');
 
+/* Order types and styles come from the price list on the client page. */
+function refreshOrderSelects() {
+  const types = ((site && site.prices) || []).map((r) => r.name).filter(Boolean);
+  const styles = ((site && site.styles) || ['Sketch', 'Greyscale']).filter(Boolean);
+  form.type.innerHTML = [...types, 'Другое'].map((t) => `<option>${esc(t)}</option>`).join('');
+  form.style.innerHTML = styles.map((t) => `<option>${esc(t)}</option>`).join('');
+}
+refreshOrderSelects();
+
+/* Select a value, adding it as an option if an old order uses a type/style that was renamed. */
+function setSelect(sel, val) {
+  if (val && ![...sel.options].some((o) => o.value === val)) sel.add(new Option(val, val));
+  if (val) sel.value = val;
+}
+
 function suggestPrice() {
-  const p = PRICES[form.type.value] && PRICES[form.type.value][form.style.value];
-  if (p != null && (form.price.dataset.auto === '1' || !form.price.value)) {
+  const row = ((site && site.prices) || []).find((r) => r.name === form.type.value);
+  const p = row && row.prices ? row.prices[form.style.value] : null;
+  if (p !== null && p !== undefined && p !== '' && (form.price.dataset.auto === '1' || !form.price.value)) {
     form.price.value = p;
     form.price.dataset.auto = '1';
   }
@@ -738,10 +1077,19 @@ function openOrder(id) {
   $('#orderDlgTitle').textContent = o ? 'Заказ' : 'Новый заказ';
   $('#orderDelete').style.visibility = o ? 'visible' : 'hidden';
   form.reset();
-  const v = o || { type: 'Full body', style: 'Greyscale', status: 'request', canPost: 'yes' };
-  for (const k of ['client', 'contact', 'type', 'style', 'extras', 'price', 'paid', 'status', 'deadline', 'hours', 'canPost', 'notes']) {
+  refreshOrderSelects();
+  const types = ((site && site.prices) || []).map((r) => r.name);
+  const styles = (site && site.styles) || [];
+  const v = o || {
+    type: types.includes('Full body') ? 'Full body' : types[0],
+    style: styles.includes('Greyscale') ? 'Greyscale' : styles[styles.length - 1],
+    status: 'request', canPost: 'yes',
+  };
+  for (const k of ['client', 'contact', 'extras', 'price', 'paid', 'status', 'deadline', 'hours', 'canPost', 'notes']) {
     if (form[k]) form[k].value = v[k] ?? '';
   }
+  setSelect(form.type, v.type);
+  setSelect(form.style, v.style);
   form.price.dataset.auto = o ? '0' : '1';
   if (!o) suggestPrice();
   dlg.showModal();
@@ -804,7 +1152,7 @@ view.addEventListener('click', async (e) => {
   if (act === 'new') openOrder(null);
   else if (act === 'edit') openOrder(el.dataset.id);
   else if (act === 'filter') { orderFilter = el.dataset.f; render(); }
-  else if (act === 'copy') { const it = TEMPLATES[el.dataset.g].items[el.dataset.i]; copy(it.text); }
+  else if (act === 'copy') { const it = TEMPLATES[el.dataset.g].items[el.dataset.i]; copy(fillTpl(it.text)); }
   else if (act === 'copy-text') copy(el.dataset.text);
   else if (act === 'task-del') {
     e.preventDefault();
@@ -831,6 +1179,55 @@ view.addEventListener('click', async (e) => {
     render();
   }
   else if (act === 'cal-today') { calMonth = todayISO().slice(0, 7); calSel = todayISO(); render(); }
+  else if (act === 'post-day') {
+    const d = +el.dataset.d;
+    let days = postDays();
+    days = days.includes(d) ? days.filter((x) => x !== d) : [...days, d];
+    if (!days.length) { toast('Нужен хотя бы один день'); return; }
+    data.settings = { ...data.settings, postDays: days, updated: now() };
+    save(); render();
+  }
+  /* ----- client page editor ----- */
+  else if (act === 'img-move' || act === 'price-move') {
+    const list = act === 'img-move' ? siteDraft.gallery : siteDraft.prices;
+    const i = +el.dataset.i, j = i + +el.dataset.dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    markDirty(); render();
+  }
+  else if (act === 'img-del') {
+    if (!confirm('Убрать это фото со страницы?')) return;
+    siteDraft.gallery.splice(+el.dataset.i, 1);
+    markDirty(); render();
+  }
+  else if (act === 'price-add') {
+    siteDraft.prices.push({ name: 'New item', desc: '', star: false, prices: {} });
+    markDirty(); render();
+  }
+  else if (act === 'price-del') {
+    const r = siteDraft.prices[+el.dataset.i];
+    if (!confirm(`Удалить «${r.name}» из прайса?`)) return;
+    siteDraft.prices.splice(+el.dataset.i, 1);
+    markDirty(); render();
+  }
+  else if (act === 'style-add') {
+    const inp = $('#newStyle');
+    const name = (inp.value || '').replace(/\./g, ' ').trim();
+    if (!name) { inp.focus(); return; }
+    if (siteDraft.styles.includes(name)) { toast('Такая колонка уже есть'); return; }
+    siteDraft.styles.push(name);
+    markDirty(); render();
+  }
+  else if (act === 'style-del') {
+    const name = el.dataset.s;
+    if (siteDraft.styles.length <= 1) { toast('Нужна хотя бы одна колонка'); return; }
+    if (!confirm(`Убрать колонку «${name}» из прайса?`)) return;
+    siteDraft.styles = siteDraft.styles.filter((x) => x !== name);
+    for (const r of siteDraft.prices) if (r.prices) delete r.prices[name];
+    markDirty(); render();
+  }
+  else if (act === 'link-add') { siteDraft.links.push({ label: '', url: '' }); markDirty(); render(); }
+  else if (act === 'link-del') { siteDraft.links.splice(+el.dataset.i, 1); markDirty(); render(); }
   else if (act === 'sync-now') sync();
   else if (act === 'gh-off') {
     if (!confirm('Отключить синхронизацию на этом устройстве? Данные останутся в браузере и в репозитории.')) return;
@@ -859,9 +1256,26 @@ view.addEventListener('change', async (e) => {
   } else if (act === 'plan') {
     data.checks[el.dataset.id] = { v: el.checked, updated: now() };
     save(); render();
-  } else if (act === 'slots') {
-    data.settings = { ...data.settings, slots: Math.max(1, +el.value || 1), updated: now() };
+  } else if (act === 'set') {
+    const k = el.dataset.k;
+    let v = el.value;
+    if (k === 'slots') v = Math.max(1, Math.min(30, +v || 1));
+    if (k === 'planStart' && !v) v = todayISO();
+    data.settings = { ...data.settings, [k]: v, updated: now() };
     save();
+    toast('Сохранено ✓');
+  } else if (act === 'img-add') {
+    const files = [...(el.files || [])];
+    el.value = '';
+    if (!files.length) return;
+    toast('Обрабатываю фото…');
+    for (const f of files) {
+      try {
+        const { dataUrl, wide } = await toJpeg(f);
+        siteDraft.gallery.push({ pending: dataUrl, alt: '', wide });
+      } catch (err) { alert(err.message || err); }
+    }
+    markDirty(); render();
   } else if (act === 'import') {
     const file = el.files && el.files[0];
     if (!file) return;
@@ -884,6 +1298,12 @@ view.addEventListener('submit', async (e) => {
     if (!text) return;
     data.tasks.push({ id: uid(), text, done: false, updated: now() });
     save(); render();
+  } else if (el.dataset.act === 'site-loc') {
+    const c = ghConf();
+    setGhConf({ ...c, siteRepo: f.siteRepo.trim(), siteBranch: f.siteBranch.trim(), siteDir: f.siteDir.trim().replace(/^\/+|\/+$/g, '') });
+    toast('Сохранено ✓');
+    siteDirty = false; siteDraft = null;
+    loadSite(); render();
   } else if (el.dataset.act === 'gh-on') {
     const conf = { owner: f.owner.trim(), repo: f.repo.trim(), path: 'workspace.json', token: f.token.trim() };
     const btn = el.querySelector('button');
@@ -895,6 +1315,7 @@ view.addEventListener('submit', async (e) => {
       if (syncState.s === 'err') throw new Error(syncState.msg);
       toast('GitHub подключён ✓');
       render();
+      loadSite();
     } catch (err) {
       setGhConf(null);
       setSync('local');
@@ -902,6 +1323,32 @@ view.addEventListener('submit', async (e) => {
       alert('Не получилось подключиться:\n' + (err.message || err));
     }
   }
+});
+
+/* site draft fields: text/number/lines update on every keystroke, checkboxes on change */
+view.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-sp]');
+  if (!el || el.dataset.t === 'bool') return;
+  let v = el.value;
+  if (el.dataset.t === 'num') v = v.trim() === '' ? null : Number(v);
+  if (el.dataset.t === 'lines') v = v.split('\n').map((x) => x.trim()).filter(Boolean);
+  setPath(siteDraft, el.dataset.sp, v);
+  markDirty();
+});
+view.addEventListener('change', (e) => {
+  const el = e.target.closest('[data-sp][data-t="bool"]');
+  if (!el) return;
+  setPath(siteDraft, el.dataset.sp, el.checked);
+  markDirty();
+  if (el.dataset.rerender) render();
+});
+view.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d.dataset || !d.dataset.sec) return;
+  if (d.open) openSecs.add(d.dataset.sec); else openSecs.delete(d.dataset.sec);
+}, true);
+window.addEventListener('beforeunload', (e) => {
+  if (siteDirty) { e.preventDefault(); e.returnValue = ''; }
 });
 
 /* pull fresh data when coming back to the tab (e.g. phone → PC) */
@@ -912,3 +1359,4 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && gh
 setSync(ghConf() ? 'busy' : 'local');
 render();
 if (ghConf()) sync();
+loadSite();

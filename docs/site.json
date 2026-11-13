@@ -1,0 +1,54 @@
+{
+ "name": "ToDy",
+ "tagline": "Character design · OCs · D&D characters · greyscale & sketch",
+ "open": true,
+ "currency": "$",
+ "styles": ["Sketch", "Greyscale"],
+ "prices": [
+  { "name": "Doodle", "desc": "Small sticker-style doodle", "star": false, "prices": { "Sketch": 8 } },
+  { "name": "Bust", "desc": "Head & shoulders", "star": false, "prices": { "Sketch": 12, "Greyscale": 18 } },
+  { "name": "Half body", "desc": "Waist up", "star": false, "prices": { "Sketch": 18, "Greyscale": 28 } },
+  { "name": "Full body", "desc": "", "star": false, "prices": { "Sketch": 28, "Greyscale": 40 } },
+  { "name": "Character Reference Sheet", "desc": "Full body + outfit & accessory details + personality/lore notes. Perfect for OCs, books, games and TTRPGs.", "star": true, "prices": { "Greyscale": 75 } },
+  { "name": "D&D / TTRPG character", "desc": "Full body + token-ready icon for your VTT", "star": false, "prices": { "Greyscale": 50 } }
+ ],
+ "extras": [
+  "Extra character — +80%",
+  "Simple background — +$10–20",
+  "Rush (under 5 days) — +30%",
+  "Ref sheet: extra view +$10 · extra item +$3 · mini chibi +$8",
+  "Commercial use — ×2"
+ ],
+ "willDraw": "OCs, humans, humanoids, D&D/TTRPG characters, fan art, light gore",
+ "wontDraw": "NSFW, real people, hateful content, mecha, complex backgrounds",
+ "terms": {
+  "turnaround": "1–3 weeks",
+  "replyHours": 48,
+  "revisions": 2,
+  "fullUpfrontUnder": 40,
+  "payDays": 3,
+  "rush": "+30%",
+  "rushDays": 5,
+  "extraChange": "+$5–15",
+  "commercial": "×2",
+  "privateFee": "+20%",
+  "minResolution": 2000,
+  "storeMonths": 3
+ },
+ "credit": "@_ToDyWhatever",
+ "links": [
+  { "label": "X / Twitter", "url": "https://x.com/_ToDyWhatever" },
+  { "label": "Instagram", "url": "https://www.instagram.com/_todyhey/" },
+  { "label": "TikTok", "url": "https://www.tiktok.com/@tody_whatever" }
+ ],
+ "gallery": [
+  { "src": "img/ref-henry.jpg", "alt": "Character reference sheet — Henry", "wide": true },
+  { "src": "img/greyscale-2.jpg", "alt": "Greyscale full body", "wide": false },
+  { "src": "img/greyscale-1.jpg", "alt": "Greyscale half body", "wide": false },
+  { "src": "img/ref-jack.jpg", "alt": "Character reference sheet — Jack", "wide": true },
+  { "src": "img/sketchbook.jpg", "alt": "Sketchbook page", "wide": false },
+  { "src": "img/doodle.jpg", "alt": "Doodle", "wide": false },
+  { "src": "img/ref-leonida.jpg", "alt": "Character reference sheet — Leonida", "wide": true },
+  { "src": "img/greyscale-3.jpg", "alt": "Greyscale full body", "wide": true }
+ ]
+}

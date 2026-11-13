@@ -32,119 +32,14 @@
     details.tos h3 { margin-top: 1em; }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 560px) { .two { grid-template-columns: 1fr; } }
+    .open.closed { background: var(--muted); }
+    .loading { text-align: center; color: var(--muted); padding: 60px 0; }
     footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 32px; }
   </style>
 </head>
 <body>
-  <main>
-    <section class="hero">
-      <span class="open">COMMISSIONS OPEN</span>
-      <h1>ToDy<span>.</span></h1>
-      <p>Character design · OCs · D&amp;D characters · greyscale &amp; sketch</p>
-      <div class="row">
-        <a class="btn primary" href="#order">How to order</a>
-        <a class="btn" href="https://x.com/_ToDyWhatever" target="_blank" rel="noopener">X / Twitter</a>
-        <a class="btn" href="https://www.instagram.com/_todyhey/" target="_blank" rel="noopener">Instagram</a>
-        <a class="btn" href="https://www.tiktok.com/@tody_whatever" target="_blank" rel="noopener">TikTok</a>
-      </div>
-    </section>
-
-    <h2>Examples</h2>
-    <div class="gallery">
-      <a class="wide" href="img/ref-henry.jpg" target="_blank"><img src="img/ref-henry.jpg" alt="Character reference sheet — Henry" loading="lazy"></a>
-      <a href="img/greyscale-2.jpg" target="_blank"><img src="img/greyscale-2.jpg" alt="Greyscale full body" loading="lazy"></a>
-      <a href="img/greyscale-1.jpg" target="_blank"><img src="img/greyscale-1.jpg" alt="Greyscale half body" loading="lazy"></a>
-      <a class="wide" href="img/ref-jack.jpg" target="_blank"><img src="img/ref-jack.jpg" alt="Character reference sheet — Jack" loading="lazy"></a>
-      <a href="img/sketchbook.jpg" target="_blank"><img src="img/sketchbook.jpg" alt="Sketchbook page" loading="lazy"></a>
-      <a href="img/doodle.jpg" target="_blank"><img src="img/doodle.jpg" alt="Doodle" loading="lazy"></a>
-      <a class="wide" href="img/ref-leonida.jpg" target="_blank"><img src="img/ref-leonida.jpg" alt="Character reference sheet — Leonida" loading="lazy"></a>
-      <a class="wide" href="img/greyscale-3.jpg" target="_blank"><img src="img/greyscale-3.jpg" alt="Greyscale full body" loading="lazy"></a>
-    </div>
-
-    <h2>Prices <span class="muted small">(USD)</span></h2>
-    <div class="card">
-      <table class="price-table">
-        <thead><tr><th>Type</th><th>Sketch</th><th>Greyscale</th></tr></thead>
-        <tbody>
-          <tr><td><b>Doodle</b><div class="d">Small sticker-style doodle</div></td><td class="p">$8</td><td class="muted">—</td></tr>
-          <tr><td><b>Bust</b><div class="d">Head &amp; shoulders</div></td><td class="p">$12</td><td class="p">$18</td></tr>
-          <tr><td><b>Half body</b><div class="d">Waist up</div></td><td class="p">$18</td><td class="p">$28</td></tr>
-          <tr><td><b>Full body</b></td><td class="p">$28</td><td class="p">$40</td></tr>
-          <tr class="star"><td><b>⭐ Character Reference Sheet</b><div class="d">Full body + outfit &amp; accessory details + personality/lore notes. Perfect for OCs, books, games and TTRPGs.</div></td><td class="muted">—</td><td class="p">$75</td></tr>
-          <tr><td><b>🐉 D&amp;D / TTRPG character</b><div class="d">Full body + token-ready icon for your VTT</div></td><td class="muted">—</td><td class="p">$50</td></tr>
-        </tbody>
-      </table>
-      <h3 style="margin-top:14px">Extras</h3>
-      <div class="small stack">
-        <div>Extra character — <b>+80%</b> · Simple background — <b>+$10–20</b> · Rush (under 5 days) — <b>+30%</b></div>
-        <div>Ref sheet: extra view <b>+$10</b> · extra item <b>+$3</b> · mini chibi <b>+$8</b> · Commercial use — <b>×2</b></div>
-      </div>
-    </div>
-
-    <div class="two" style="margin-top:12px">
-      <div class="card"><h3>✅ Will draw</h3><div class="small">OCs, humans, humanoids, D&amp;D/TTRPG characters, fan art, light gore</div></div>
-      <div class="card"><h3>❌ Won't draw</h3><div class="small">NSFW, real people, hateful content, mecha, complex backgrounds</div></div>
-    </div>
-
-    <h2 id="order">How to order</h2>
-    <div class="card">
-      <ol class="steps">
-        <li>Copy the form below and send it to me in DMs on <a href="https://x.com/_ToDyWhatever" target="_blank" rel="noopener">X</a> or <a href="https://www.instagram.com/_todyhey/" target="_blank" rel="noopener">Instagram</a>.</li>
-        <li>I confirm and send you a <b>PayPal invoice</b> (USD).</li>
-        <li>I send a <b>sketch</b> for approval — up to 2 free revisions.</li>
-        <li>I finish the artwork and send you a high-res PNG. ⏳ Usually <b>1–3 weeks</b>.</li>
-      </ol>
-      <div class="tpl">
-        <pre id="form">Commission request — ToDy
-1. Name / nickname:
-2. Type: Doodle / Bust / Half body / Full body / Ref sheet / D&amp;D character
-3. Style: Sketch / Greyscale
-4. Extras:
-5. Character references (links):
-6. About the character (personality, mood):
-7. Pose / expression ideas (or "artist's choice"):
-8. Personal or commercial use:
-9. Can I post it in my portfolio? Yes / Later / No
-10. Deadline (if any):
-11. PayPal email for the invoice:
-☐ I have read and agree to the Terms of Service</pre>
-        <button class="btn primary" id="copyForm">Copy form</button>
-      </div>
-    </div>
-
-    <h2>Terms of Service</h2>
-    <details class="tos">
-      <summary>Read the full ToS (by ordering you agree to it)</summary>
-      <h3>1. General</h3>
-      <p>I can decline any commission without giving a reason. I work in greyscale and sketch styles — please check my examples before ordering. I reply within 48 hours.</p>
-      <h3>2. Payment</h3>
-      <p>Prices are in USD, paid via <b>PayPal invoice</b> only. Orders under $40 — full payment upfront. Orders $40+ — 50% upfront, 50% after the sketch is approved. I start after payment. Invoices must be paid within 3 days, otherwise the slot goes to the next person.</p>
-      <h3>3. Revisions</h3>
-      <p>Up to 2 free revisions at the sketch stage. At the final stage — small fixes only. Bigger changes after sketch approval: +$5–15.</p>
-      <h3>4. Turnaround</h3>
-      <p>Usually 1–3 weeks from payment. Rush (under 5 days): +30%, if I have time. I'll keep you updated.</p>
-      <h3>5. Refunds</h3>
-      <p>Before the sketch is started — full refund. After the sketch is sent — 50%. After the final is sent — no refund. If I can't finish your commission, you get a full refund for unfinished work. Opening a chargeback without contacting me first means a permanent ban.</p>
-      <h3>6. Usage rights</h3>
-      <p><b>Allowed:</b> personal use — avatars, banners, personal prints, posting with credit (<code>art by @_ToDyWhatever</code>), OC references, VTT tokens.<br>
-      <b>Needs a commercial license (×2):</b> selling prints/merch, books, games, ads, any paid products.<br>
-      <b>Never allowed:</b> AI training or feeding my art into AI tools, NFTs, claiming the art as yours, removing my signature.<br>
-      I keep the copyright and may post the work in my portfolio. Want it private? Tell me before ordering (+20%).</p>
-      <h3>7. Files</h3>
-      <p>You get a high-resolution PNG (2000px+ on the long side). Please keep your files — I don't guarantee storing them after 3 months.</p>
-    </details>
-
-    <footer>© ToDy · no AI · 🇰🇿</footer>
-  </main>
+  <main id="page"><div class="loading">Loading…</div></main>
   <div class="toast" id="toast"></div>
-  <script>
-    document.getElementById('copyForm').addEventListener('click', async () => {
-      const text = document.getElementById('form').textContent;
-      try { await navigator.clipboard.writeText(text); } catch (e) {}
-      const t = document.getElementById('toast');
-      t.textContent = 'Copied ✓'; t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 1600);
-    });
-  </script>
+  <script src="commissions.js"></script>
 </body>
 </html>
